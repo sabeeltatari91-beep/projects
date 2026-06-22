@@ -198,9 +198,14 @@ def process_frame(frame_arr):
     if sub_visible(out):
         sub_strip = out[SUB_Y1:SUB_Y2].copy()
 
-        # Fill original position with the map row just above it (no gradient blur)
-        ref_row = out[SUB_Y1 - 4, :, :].copy()
-        out[SUB_Y1:SUB_Y2] = ref_row[np.newaxis, :, :]
+        # Fill original position with a vertical gradient between the terrain
+        # rows immediately above and below the subtitle band — this blends
+        # naturally into the surrounding map instead of leaving a flat smear.
+        top = out[SUB_Y1 - 3, :, :].astype(np.float32)
+        bot = out[SUB_Y2 + 3, :, :].astype(np.float32)
+        for i in range(SUB_H):
+            alpha = i / (SUB_H - 1)
+            out[SUB_Y1 + i] = (top * (1 - alpha) + bot * alpha).clip(0, 255).astype(np.uint8)
 
         # Paste at very bottom (above footer)
         out[SUB_NEW_Y1:SUB_NEW_Y2] = sub_strip
