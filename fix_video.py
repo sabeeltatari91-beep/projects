@@ -21,7 +21,7 @@ W, H = 1920, 1080
 # Header spans y=98-155, text at y=117-131, x starts ~36, ends ~422
 PANEL_X1      = 36
 PANEL_Y1      = 98     # top of panel box
-PANEL_X2      = 425    # right edge of original panel (to cover fully)
+PANEL_X2      = 490    # right edge of original panel (pixel-scanned: red border at x=485)
 
 # y-centres of each bullet item text row (verified from pixel scan)
 ITEM_Y_DETECT = [193, 227, 261, 295, 329, 363, 397, 431, 465, 499]
@@ -198,14 +198,9 @@ def process_frame(frame_arr):
     if sub_visible(out):
         sub_strip = out[SUB_Y1:SUB_Y2].copy()
 
-        # Fill original position with a vertical gradient between the terrain
-        # rows immediately above and below the subtitle band — this blends
-        # naturally into the surrounding map instead of leaving a flat smear.
-        top = out[SUB_Y1 - 3, :, :].astype(np.float32)
-        bot = out[SUB_Y2 + 3, :, :].astype(np.float32)
-        for i in range(SUB_H):
-            alpha = i / (SUB_H - 1)
-            out[SUB_Y1 + i] = (top * (1 - alpha) + bot * alpha).clip(0, 255).astype(np.uint8)
+        # Fill original position with the terrain that sits immediately below
+        # the subtitle band — clean map pixels, no text.
+        out[SUB_Y1:SUB_Y2] = out[SUB_Y2:SUB_Y2 + SUB_H]
 
         # Paste at very bottom (above footer)
         out[SUB_NEW_Y1:SUB_NEW_Y2] = sub_strip
@@ -216,7 +211,7 @@ def process_frame(frame_arr):
         ph = panel_h(n)
 
         # How far down the ORIGINAL panel content extends (34px item spacing)
-        orig_bottom = PANEL_Y1 + 57 + 28 + n * 34 + 20
+        orig_bottom = PANEL_Y1 + 57 + 28 + n * 34 + 40
         cover_y2    = max(PANEL_Y1 + ph + 5, orig_bottom)
 
         # 1. Restore the whole cover band from the clean map reference so there
