@@ -65,7 +65,7 @@ C_RED_DOT   = (255,  60,  60)
 C_ORANGE    = (240, 162,  50)
 C_WHITE     = (255, 255, 255)
 C_ITEM_TXT  = (200, 220, 255)
-C_BORDER    = (170,  50,  50)
+C_BORDER    = (210,  45,  45)   # bright red border, matches header
 
 # ── FONTS ─────────────────────────────────────────────────────────────────────
 F_HDR_PATH  = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf"
@@ -114,8 +114,8 @@ def render_state(n):
     draw   = ImageDraw.Draw(canvas)
     bx, by = 1, 1
 
-    # outer border
-    draw.rectangle([0, 0, BOX_W+1, ph+1], outline=(*C_BORDER, 200))
+    # outer border — 2px thick red so panel body is clearly in the red box
+    draw.rectangle([0, 0, BOX_W+3, ph+3], outline=(*C_BORDER, 255), width=2)
 
     # red header
     draw.rectangle([bx, by, bx+BOX_W, by+HDR_H], fill=(*C_HDR_BG, 230))
@@ -156,6 +156,15 @@ print("Pre-rendering 11 panel states …")
 STATES = [render_state(n) for n in range(11)]
 print(f"Done. Box width = {BOX_W}px (original was ~389px)")
 
+# ── PRE-LOAD MAP REFERENCE ────────────────────────────────────────────────────
+# Grab a frame before the panel appears (t=5s) so we have clean map pixels to
+# restore below the new (shorter) panel box instead of leaving a dark rectangle.
+print("Loading map reference frame …")
+_ref_clip = VideoFileClip(VIDEO_IN)
+MAP_REF   = _ref_clip.get_frame(5).copy()   # uint8 RGB, no panel present yet
+_ref_clip.close()
+print("Map reference loaded.")
+
 # ── DETECTION ────────────────────────────────────────────────────────────────
 
 def panel_visible(arr):
@@ -189,14 +198,11 @@ def process_frame(frame_arr):
     if sub_visible(out):
         sub_strip = out[SUB_Y1:SUB_Y2].copy()
 
-        # Fill original position by blending rows just above & below
-        above = out[max(0, SUB_Y1-6):SUB_Y1].mean(axis=0).astype(np.uint8)
-        below = out[SUB_Y2:min(H, SUB_Y2+6)].mean(axis=0).astype(np.uint8)
-        for dy in range(SUB_H):
-            t = dy / SUB_H
-            out[SUB_Y1+dy] = ((1-t)*above + t*below).astype(np.uint8)
+        # Fill original position with the map row just above it (no gradient blur)
+        ref_row = out[SUB_Y1 - 4, :, :].copy()
+        out[SUB_Y1:SUB_Y2] = ref_row[np.newaxis, :, :]
 
-        # Paste at bottom
+        # Paste at very bottom (above footer)
         out[SUB_NEW_Y1:SUB_NEW_Y2] = sub_strip
 
     # ── Panel: cover old, draw new ───────────────────────────────────────────
@@ -204,11 +210,17 @@ def process_frame(frame_arr):
         n = count_items(out)
         ph = panel_h(n)
 
-        # Erase old panel (solid dark fill wider+taller than any state)
-        out[PANEL_Y1-2 : PANEL_FULL_Y2+10,
-            PANEL_X1-2 : PANEL_X2+10] = C_DARK_BG
+        # How far down the ORIGINAL panel content extends (34px item spacing)
+        orig_bottom = PANEL_Y1 + 57 + 28 + n * 34 + 20
+        cover_y2    = max(PANEL_Y1 + ph + 5, orig_bottom)
 
-        # Composite new panel
+        # 1. Restore the whole cover band from the clean map reference so there
+        #    is no dark rectangle anywhere — new panel will be composited on top.
+        out[PANEL_Y1-2 : cover_y2,
+            PANEL_X1-2 : PANEL_X2 + 5] = MAP_REF[PANEL_Y1-2 : cover_y2,
+                                                   PANEL_X1-2 : PANEL_X2 + 5]
+
+        # 2. Composite new panel over the restored map pixels
         pw, phl = STATES[n].size
         region  = Image.fromarray(
             out[PANEL_Y1-1 : PANEL_Y1-1+phl,
