@@ -157,11 +157,11 @@ STATES = [render_state(n) for n in range(11)]
 print(f"Done. Box width = {BOX_W}px (original was ~389px)")
 
 # ── PRE-LOAD MAP REFERENCE ────────────────────────────────────────────────────
-# Grab a frame before the panel appears (t=5s) so we have clean map pixels to
-# restore below the new (shorter) panel box instead of leaving a dark rectangle.
+# t=45s is the last frame before the panel appears AND has full video brightness
+# (t=5s was too dark — video was still fading in, mean≈45 vs panel frames ≈58).
 print("Loading map reference frame …")
 _ref_clip = VideoFileClip(VIDEO_IN)
-MAP_REF   = _ref_clip.get_frame(5).copy()   # uint8 RGB, no panel present yet
+MAP_REF   = _ref_clip.get_frame(45).copy()  # last no-panel frame, correct brightness
 _ref_clip.close()
 print("Map reference loaded.")
 
