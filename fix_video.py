@@ -13,7 +13,7 @@ import numpy as np
 import os
 
 VIDEO_IN  = "/root/.claude/uploads/27557df3-3375-5514-80f8-af35a4e4ddd7/872544b9-JARRAR_Loophole_Scenario_v5_final.mp4"
-VIDEO_OUT = "/home/user/projects/JARRAR_Loophole_Scenario_v6_fixed.mp4"
+VIDEO_OUT = "/home/user/Desktop/JARRAR_Loophole_Scenario_v6_fixed.mp4"
 
 W, H = 1920, 1080
 
