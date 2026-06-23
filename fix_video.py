@@ -194,16 +194,42 @@ def sub_visible(arr):
 def process_frame(frame_arr):
     out = frame_arr.copy()
 
-    # ── Subtitle: move to bottom ─────────────────────────────────────────────
+    # ── Subtitle: cinematic thin container at bottom ─────────────────────────
     if sub_visible(out):
-        sub_strip = out[SUB_Y1:SUB_Y2].copy()
+        orig_strip = out[SUB_Y1:SUB_Y2].copy()          # 76px original band
 
-        # Fill original position with the terrain that sits immediately below
-        # the subtitle band — clean map pixels, no text.
+        # Erase original subtitle position with terrain from below
         out[SUB_Y1:SUB_Y2] = out[SUB_Y2:SUB_Y2 + SUB_H]
 
-        # Paste at very bottom (above footer)
-        out[SUB_NEW_Y1:SUB_NEW_Y2] = sub_strip
+        # Identify text rows: rows with >100 bright pixels (threshold filters
+        # thin map-arc lines which produce only a handful of bright pixels/row)
+        bright_count = (orig_strip.max(axis=2) > 180).sum(axis=1)  # (76,)
+        dense = np.where(bright_count > 100)[0]
+
+        if len(dense) > 0:
+            t_top = max(0, int(dense[0]) - 3)
+            t_bot = min(SUB_H - 1, int(dense[-1]) + 3)
+            text_slice = orig_strip[t_top:t_bot + 1]
+            text_h     = text_slice.shape[0]
+
+            PAD_V  = 8
+            cont_h = text_h + PAD_V * 2             # minimal container height
+            c_y2   = H - FOOTER_H                   # 1058
+            c_y1   = max(0, c_y2 - cont_h)
+
+            # 50 % semi-transparent dark background
+            region = out[c_y1:c_y2].astype(np.float32)
+            out[c_y1:c_y2] = (region * 0.50).clip(0, 255).astype(np.uint8)
+
+            # Composite text over darkened bg using brightness as alpha
+            # — dark bg pixels in text_slice become transparent, text glows
+            py1      = c_y1 + PAD_V
+            py2      = min(py1 + text_h, H)
+            actual_h = py2 - py1
+            bg_f     = out[py1:py2].astype(np.float32)
+            txt_f    = text_slice[:actual_h].astype(np.float32)
+            alpha    = (txt_f.max(axis=2) / 255.0)[:, :, np.newaxis]
+            out[py1:py2] = (txt_f * alpha + bg_f * (1 - alpha)).clip(0, 255).astype(np.uint8)
 
     # ── Panel: cover old, draw new ───────────────────────────────────────────
     if panel_visible(out):
